@@ -57,10 +57,34 @@ def test__closest_digitized_point():
     return
 
 
-# def test__crop():
-#     pass
-# 
-# 
+def test__crop():
+    # Full record
+    x = np.arange(Nwindows * Npts_per_window)
+
+    # Global indices for a particular slice
+    start_position_in_windows = 3.75
+    gstart = np.int(start_position_in_windows * Npts_per_window)
+    gstop = gstart + 100
+
+    # Times corresponding to global indices
+    t0 = trigger_time + (gstart / Fs)
+    tf = trigger_time + (gstop / Fs)
+    tlim = [t0, tf]
+
+    # Prior to cropping, retrieved raw signals will be arrays
+    # with lengths that are integer multiples of `Npts_per_window`
+    window = np.int(np.floor(start_position_in_windows))
+    retrieved_slice = slice(
+        window * Npts_per_window,
+        (window + 1) * Npts_per_window)
+
+    np.testing.assert_equal(
+        x[gstart:(gstop + 1)],
+        _crop(x[retrieved_slice], tlim)[1])
+
+    return
+
+
 def test__windows():
     # Lowest window
     tlim = [trigger_time, trigger_time + (1000. / Fs)]
