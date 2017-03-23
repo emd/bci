@@ -28,7 +28,7 @@ Npts_total = (Nwindows * Npts_per_window)
 
 
 class Signal(object):
-    def __init__(self, shot, chord='V2', beam='CO2', tlim=None):
+    def __init__(self, shot, chord='V2', beam='CO2', tlim=[-0.05, 5.2]):
         '''Create an instance of the `Signal` class.
 
         Input parameters:
@@ -46,7 +46,8 @@ class Signal(object):
 
         tlim - array_like, (2,)
             The lower and upper limits in time for which the signal
-            will be retrieved.
+            will be retrieved. The default values correspond to
+            the default digitization limits of the mitpci system.
 
             If `tlim` is not `None` and it is *not* a length-two array,
             a ValueError is raised.
@@ -202,7 +203,7 @@ def _crop(sig, tlim):
 
     # Convert global indices to "local" indices relevant for slicing `sig`
     lstart = gstart % Npts_per_window
-    lstop = lstart + (gstart - gstop)
+    lstop = lstart + (gstop - gstart)
 
     # Determine time closest to `tlim[0]`
     t0 = trigger_time + (gstart / Fs)
