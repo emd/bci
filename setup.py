@@ -7,7 +7,7 @@ config = {
     'name': 'bci',
     'version': '0.1',
     'packages': ['bci'],
-    'install_requires': ['nose'],
+    'install_requires': ['nose', 'numpy', 'MDSplus'],
     'author': 'Evan M. Davis',
     'author_email': 'emd@mit.edu',
     'url': '',
