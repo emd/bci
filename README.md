@@ -45,7 +45,8 @@ If the tests return "OK", the installation should be working.
 ... elsewhere:
 --------------
 Define an environmental variable `$bci_path` specifying
-the appropriate MDSplus server's tree-path definitions
+the appropriate MDSplus server's
+[tree-path definitions](http://www.mdsplus.org/index.php?title=Documentation:Tutorial:RemoteAccess&open=51668177299325667246079&page=Documentation%2FThe+MDSplus+tutorial%2FRemote+data+access+in+MDSplus)
 by, for example, adding the following to your `.bashrc`
 
     $ export bci_path='atlas.gat.com::/data/usershots/~t\;atlas.gat.com::/data/shots/~t/~f~e/~d~c\;atlas.gat.com::/data/orphans/\;atlas.gat.com::/data/models/~t'
