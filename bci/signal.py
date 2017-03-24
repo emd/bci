@@ -68,7 +68,7 @@ class Signal(object):
 
     '''
     def __init__(self, shot, chord='V2', beam='CO2',
-                 tlim=[-0.05, 5.2], vibration_subtracted=True):
+                 tlim=[-0.05, 5.2], vibration_subtracted=False):
         '''Create an instance of the `Signal` class.
 
         Input parameters:

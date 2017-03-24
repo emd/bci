@@ -74,3 +74,64 @@ To test your installation, run
     $ nosetests tests/
 
 If the tests return "OK", the installation should be working.
+
+
+Use:
+====
+The *single-pass* phase measured by
+the DIII-D bi-color interferometer (BCI)
+can be readily retrieved via the
+the `bci.signal.Signal` class. For example, use:
+
+```python
+import bci
+
+shot = 169572
+tlim = [0, 2]        # [tlim] = s
+
+sig_V2 = bci.signal.Signal(shot, chord='V2', beam='CO2', tlim=tlim)
+
+```
+
+to retrieve the phase signal from the `'V2'` `'CO2'` beam.
+Valid values of `chord` are `{'V1', 'V2', 'V3', 'R0'}` and
+valid values of `beam` are `{'CO2', 'HeNe'}`.
+If `beam` is `'CO2'`, the `vibration_subtracted` keyword
+can also be set to `True` to remove vibrational contributions
+to the CO2-measured phase; that is
+
+```python
+sig_V2_no_vib = bci.signal.Signal(
+    shot, chord='V2', beam='CO2', tlim=tlim,
+    vibration_subtracted=True)
+
+```
+
+Vibrational contributions to the CO2-measured phase
+are typically small for frequencies above 10 kHz.
+
+The autospectral density of V2-measured phase
+can then be computed and easily visualized using the
+[random_data package](https://github.com/emd/random_data).
+Specifically,
+
+```python
+import random_data as rd
+
+# Spectral-estimation parameters
+Tens = 5e-3         # Ensemble time length, [Tens] = s
+Nreal_per_ens = 10  # Number of realizations per ensemeble
+
+# Compute autospectral density
+asd_V2 = rd.spectra.AutoSpectralDensity(
+    sig_V2.x, Fs=sig_V2.Fs, t0=sig_V2.t0,
+    Tens=Tens, Nreal_per_ens=Nreal_per_ens)
+
+asd_V2.plotSpectralDensity(
+    flim=[50e3, 400e3],
+    xlabel='$t \, [\mathrm{s}]$',
+    ylabel='$f \, [\mathrm{Hz}]$')
+
+```
+
+![autospectral_density_V2](https://raw.githubusercontent.com/emd/bci/master/figs/autospectral_density_V2.png)
