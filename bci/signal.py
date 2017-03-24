@@ -21,11 +21,6 @@ _Nwindows = 9
 _Npts_per_window = 2 ** 21
 _Npts_total = (_Nwindows * _Npts_per_window)
 
-# Prefactor to convert line-integrated density to corresponding phase
-# for a CO2 beam
-# [re_lambda0] = m^2
-# re_lambda0 = (2.8e-15) * (10.6e-6)
-
 
 class Signal(object):
     '''An object corresponding to the signal retrieved from the BCI system.
@@ -59,6 +54,10 @@ class Signal(object):
         then `Signal.x[0]` = x(t0)
         [t0] = s
 
+    vibration_subtracted - bool
+        If True and `self.beam` is CO2, the vibrational contributions
+        to the phase data `self.x` have been removed.
+
     Methods:
     --------
     t - returns retrieved signal time-base, array-like, (`N`,)
@@ -68,7 +67,8 @@ class Signal(object):
         [t] = s
 
     '''
-    def __init__(self, shot, chord='V2', beam='CO2', tlim=[-0.05, 5.2]):
+    def __init__(self, shot, chord='V2', beam='CO2',
+                 tlim=[-0.05, 5.2], vibration_subtracted=True):
         '''Create an instance of the `Signal` class.
 
         Input parameters:
@@ -94,11 +94,14 @@ class Signal(object):
 
             [tlim] = s
 
+        vibration_subtracted - bool
+            If True *and* `beam` is CO2, use vibration-subtracted phase data.
+
         '''
         self.shot = shot
 
         if str.upper(chord) in set(['V1', 'V2', 'V3', 'R0']):
-            self.chord = chord
+            self.chord = str.upper(chord)
         else:
             raise ValueError('`chord` may be V1, V2, V3, or R0.')
 
@@ -108,6 +111,11 @@ class Signal(object):
             self.beam = 'HeNe'
         else:
             raise ValueError('`beam` may be CO2 or HeNe.')
+
+        if vibration_subtracted and (self.beam == 'CO2'):
+            self.vibration_subtracted = True
+        else:
+            self.vibration_subtracted = False
 
         # Sampling rate
         self.Fs = _Fs
@@ -130,7 +138,7 @@ class Signal(object):
         windows = _windows(tlim)
 
         # Initialize array to store (potentially) concatenated phase data
-        ph = np.zeros(_Npts_per_window * len(windows))
+        sig = np.zeros(_Npts_per_window * len(windows))
 
         # Open MDSplus tree
         tree = mds.Tree('bci', self.shot, 'ReadOnly')
@@ -144,35 +152,46 @@ class Signal(object):
         else:
             raise ValueError('%s is not a valid beam type' % self.beam)
 
-        print '\nLoading %s %s phase data' % (self.chord, self.beam)
+        if self.vibration_subtracted and (self.beam == 'CO2'):
+            phase_datatype = 'vibration-subtracted'
+        else:
+            phase_datatype = 'raw'
+
+        print ('\nLoading %s %s phase data (%s)'
+               % (self.chord, self.beam, phase_datatype))
 
         # Cycle through each window to iteratively build up signal
         for i, window in enumerate(windows):
             print 'Window %i (%i of %i)' % (window, i + 1, len(windows))
 
-            #  if from_density:
-            #      # [line-integrated density] = m / cm^3
-            #      node = tree.getNode('\den%s_uf_%i' % (chord, w))
-            #  else:
-            node = tree.getNode(
-                '\PL%i%s_UF_%i' % (beam_number, self.chord, window))
+            # Determine whether to retrieve raw or vibration-subtracted phase
+            if self.vibration_subtracted and (self.beam == 'CO2'):
+                # [line-integrated density] = m / cm^3
+                node = tree.getNode('\DEN%s_UF_%i' % (self.chord, window))
+            else:
+                # [phase] = radians
+                node = tree.getNode(
+                    '\PL%i%s_UF_%i' % (beam_number, self.chord, window))
 
+            # Insert retrieved signal into appropriate location
             sl = slice(_Npts_per_window * i, (_Npts_per_window * (i + 1)))
-            ph[sl] = node.getData().data()
-
-            # # Convert vibration-subtracted, line-integrated density
-            # # to corresponding phase, if needed.
-            # # (The (100 ** 3) is to convert from cm^{-3} to m^{-3}).
-            # if from_density:
-            #     ph[sl] *= re_lambda0 * (100 ** 3)
+            sig[sl] = node.getData().data()
 
         # Crop signal to desired time window
-        t0, ph = _crop(ph, tlim)
+        t0, sig = _crop(sig, tlim)
 
         # Convert from double-pass to single-pass measurement
-        ph /= 2
+        sig /= 2
 
-        return t0, ph
+        # Convert vibration-subtracted, line-integrated density
+        # to corresponding phase, if needed.
+        if self.vibration_subtracted and (self.beam == 'CO2'):
+            re = 2.818e-15      # classical electron radius, [re] = m
+            lambda0 = 10.6e-6   # CO2 wavelength, [lambda0] = m
+            cm_per_m = 100
+            sig *= (re * lambda0 * (cm_per_m ** 3))
+
+        return t0, sig
 
     def t(self):
         'Get times for points in `self.x`.'
@@ -252,86 +271,45 @@ def _crop(sig, tlim):
     t0 = _trigger_time + (gstart / _Fs)
 
     return t0, sig[lstart:(lstop + 1)]
-# 
-# 
-# def phase_co2(shot, tlim, chord='V2', from_density=False):
-#     '''Returns BCI CO2 phase along `chord` for `tlim` in `shot`.
-# 
-#     Parameters:
-#     -----------
-#     shot - int
-#         DIII-D shot number
-# 
-#     tlim - list, of length 2
-#         Requested lower and upper bounds of retrieved phase.
-#         [tlim] = s
-# 
-#     chord - string
-#         BCI chord: {'V1', 'V2', 'V3', 'R0'}
-# 
-#     from_density - bool
-#         Convert vibration-subtracted line-integrated density
-#         to corresponding phase if True (this can help remove
-#         low-frequency vibrational contributions in correlation
-#         with 285 interferometer).
-# 
-#     Returns:
-#     --------
-#     (tstart, ph) - tuple, where
-# 
-#     tstart - int
-#         Time (in seconds) corresponding to first point of returned phase,
-#         i.e. the time corresponding to `ph[0]`
-#         [tstart] = s
-# 
-#     ph - array_like
-#         The retrieved CO2 phase.
-#         [ph] = rad
-# 
-#     '''
-#     # Ensure `tlim` is ordered chronologically
-#     tlim = np.sort(tlim)
-# 
-#     ws = windows(tlim)
-#     tree = mds.Tree('bci', shot, 'ReadOnly')
-# 
-#     print '\nLoading %s CO2 phase data' % chord
-# 
-#     # Initialize array to store (potentially) concatenated phase data
-#     ph = np.zeros(_Npts_per_window * len(ws))
-# 
-#     for i, w in enumerate(ws):
-#         print 'Window %i of %i' % (i + 1, len(ws))
-# 
-#         if from_density:
-#             # [line-integrated density] = m / cm^3
-#             node = tree.getNode('\den%s_uf_%i' % (chord, w))
-#         else:
-#             node = tree.getNode('\pl1%s_uf_%i' % (chord, w))
-# 
-#         sl = slice(_Npts_per_window * i, (_Npts_per_window * (i + 1)))
-#         ph[sl] = node.getData().data()
-# 
-#         # Convert vibration-subtracted, line-integrated density
-#         # to corresponding phase, if needed.
-#         # (The (100 ** 3) is to convert from cm^{-3} to m^{-3}).
-#         if from_density:
-#             ph[sl] *= re_lambda0 * (100 ** 3)
-# 
-#     # Crop returned phase to desired time window
-# 
-#     # First, determine position of start and stop in global record
-#     pt_start = closest_digitized_point(tlim[0])
-#     pt_stop = closest_digitized_point(tlim[1])
-# 
-#     # Convert positions in global record to indices of `ph`
-#     ind_start = pt_start % _Npts_per_window
-#     ind_stop = ((len(ws) - 1) * _Npts_per_window) + (pt_stop % _Npts_per_window)
-# 
-#     # ... then crop
-#     ph = ph[ind_start:(ind_stop + 1)]
-# 
-#     # Determine time corresponding to `ph[0]`
-#     tstart = t0 + (closest_digitized_point(tlim[0]) / _Fs)
-# 
-#     return tstart, ph
+
+
+def _plasma_induced_phase(
+        ph1, ph2, lambda1=10.6e-6, lambda2=0.633e-6):
+    '''Get plasma-induced phase corresponding to raw phase measurement
+    `ph1` by using phase measurements at another wavelength to
+    subtract the vibrational contributions from `ph1`.
+
+    Parameters:
+    -----------
+    ph1 - array_like, (`N`,)
+        The raw phase measurement at probe wavelength `lambda1`.
+        Vibrational contributions will be removed from `ph1` such that
+        the returned phase consists only of the plasma-induced
+        contributions to `ph1`.
+        [ph1] = radian
+
+    ph2 - array_like, (`N`,)
+        The raw phase measurement at probe wavelength `lambda2`.
+        This measurement is used to remove the vibrational contributions
+        from `ph1`.
+        [ph2] = radian
+
+    lambda1 - float
+        Probe wavelength of the primary beam.
+        [lambda1] = m
+
+    lambda2 - float
+        Probe wavelength of the secondary beam.
+        [lambda2] = m
+
+    Returns:
+    --------
+    ph1_plasma - array_like, (`N`,)
+        The plasma-induced phase contributions to `ph1`.
+        [ph1_plasma] = radian
+
+    '''
+    num = lambda1 * ((lambda1 * ph1) - (lambda2 * ph2))
+    den = (lambda1 ** 2) - (lambda2 ** 2)
+
+    return num / den
