@@ -8,7 +8,8 @@ Installation:
 ... on GA's Iris cluster:
 -------------------------
 Package management is cleanly handled on Iris via
-[modules](https://diii-d.gat.com/diii-d/Iris#Environment_modules).
+[modules](https://diii-d.gat.com/diii-d/Iris#Environment_modules)
+(GA internal site).
 The `bci` package has a corresponding modulefile
 [here](https://github.com/emd/modulefiles).
 
@@ -93,7 +94,7 @@ sig_V2 = bci.signal.Signal(shot, chord='V2', beam='CO2', tlim=tlim)
 
 ```
 
-to retrieve the phase signal from the `'V2'` `'CO2'` beam.
+to retrieve the phase signal from the V2 CO2 beam.
 Valid values of `chord` are `{'V1', 'V2', 'V3', 'R0'}` and
 valid values of `beam` are `{'CO2', 'HeNe'}`.
 If `beam` is `'CO2'`, the `vibration_subtracted` keyword
@@ -108,7 +109,14 @@ sig_V2_no_vib = bci.signal.Signal(
 ```
 
 Vibrational contributions to the CO2-measured phase
-are typically small for frequencies above 10 kHz.
+are typically "small" for frequencies above 10 kHz.
+While removing the vibrational contributions
+from the CO2-measured phase
+can increase the signal-to-noise ratio in *some cases*,
+it can potentially introduce other problems,
+as is discussed on the
+[BCI homepage](https://diii-d.gat.com/diii-d/Mci#Known_Problems)
+(GA internal site).
 
 The autospectral density of V2-measured phase
 can then be computed and easily visualized using the
