@@ -87,7 +87,7 @@ the `bci.signal.Signal` class. For example, use:
 import bci
 
 shot = 169572
-tlim = [0, 2]        # [tlim] = s
+tlim = [0, 2]  # [tlim] = s
 
 sig_V2 = bci.signal.Signal(shot, chord='V2', beam='CO2', tlim=tlim)
 
