@@ -198,8 +198,9 @@ class Signal(object):
         return self.t0 + (np.arange(len(self.x)) / self.Fs)
 
 
-def _closest_digitized_point(t):
-    '''Get global index of digitized point closest to time `t`.
+def _closest_digitized_point(t, mode=np.round):
+    '''Get global index of digitized point closest to time `t`,
+    subject to constraint provided by `mode`.
 
     Here, "global index" refers to the fact that the BCI record
     for each chord and beam in any given shot is split across
@@ -214,13 +215,27 @@ def _closest_digitized_point(t):
         Time.
         [t] = s
 
+    mode - callable
+        May be {`np.round`, `np.floor`, `np.ceil`},
+        otherwise a ValueError is raised.
+
+        - `np.round`: get closest digitized point to time `t`
+        - `np.floor`: get digitized point that is closest to
+          *and* less-than or equal to time `t`
+        - `np.ceil`: get digitized point that is closest to
+          *and* greater-than or equal to time `t`
+
     Returns:
     --------
     pt - int
-        The global index of digitized point closest to time `t`.
+        The global index of digitized point closest to time `t`,
+        subject to constraint provided by `mode`.
 
     '''
-    pt = np.int(np.round(_Fs * (t - _trigger_time)))
+    if mode in set([np.round, np.floor, np.ceil]):
+        pt = np.int(mode(_Fs * (t - _trigger_time)))
+    else:
+        raise ValueError('`mode` may be {`np.round`, `np.floor`, `np.ceil`}')
 
     # Ensure point does not exceed bounds of digitizer record
     if pt < 0:

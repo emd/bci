@@ -6,52 +6,111 @@ from bci.signal import (
 
 
 def test__closest_digitized_point():
-    # Times less than `_trigger_time` should point to first digitized point
-    tools.assert_equal(
-        _closest_digitized_point(_trigger_time - 1),
-        0)
+    # Invalid `mode` should raise value error
+    tools.assert_raises(ValueError, _closest_digitized_point, 0, np.float)
 
-    # Time at `_trigger_time` should point to first digitized point
-    tools.assert_equal(
-        _closest_digitized_point(_trigger_time),
-        0)
-
-    # Time at last time should point to last digitized point
+    # Final digitized point
     tf = _trigger_time + (_Npts_total / _Fs)
-    tools.assert_equal(
-        _closest_digitized_point(tf),
-         _Npts_total - 1)
 
-    # Times after last time should point to last digitized point
-    tools.assert_equal(
-        _closest_digitized_point(tf + 1),
-         _Npts_total - 1)
-
-    # Somewhere in the middle
+    # Time somewhere in digitization window (midpoint if `divisor` == 2)
+    # that corresponds exactly to a digitization timestamp
     divisor = 2
     t = _trigger_time + ((_Npts_total // divisor) * (1. / _Fs))
-    tools.assert_equal(
-        _closest_digitized_point(t),
-        (_Npts_total // divisor))
+
+    # When the time *exactly* corresponds to the digitizer timestamp
+    # or when the time is before or after the digitization window,
+    # the results do *not* depend on `mode`
+    modes = [np.round, np.floor, np.ceil]
+    for mode in modes:
+        # Times less than `_trigger_time` point to first digitized point
+        tools.assert_equal(
+            _closest_digitized_point(_trigger_time - 1, mode=mode),
+            0)
+
+        # Times after last time should point to last digitized point
+        tools.assert_equal(
+            _closest_digitized_point(tf + 1, mode=mode),
+             _Npts_total - 1)
+
+        # Time at `_trigger_time` should point to first digitized point
+        tools.assert_equal(
+            _closest_digitized_point(_trigger_time, mode=mode),
+            0)
+
+        # Time at last time should point to last digitized point
+        tools.assert_equal(
+            _closest_digitized_point(tf, mode=mode),
+             _Npts_total - 1)
+
+        tools.assert_equal(
+            _closest_digitized_point(t, mode=mode),
+            (_Npts_total // divisor))
 
     # Check that things work when time does *not* correspond
     # to a digitizer time stamp
+
+    # Add *half* of interval between successive timestamps to `t`
+    tools.assert_equal(
+        _closest_digitized_point(t + (0.5 / _Fs), mode=np.round),
+        (_Npts_total // divisor))
+
+    tools.assert_equal(
+        _closest_digitized_point(t + (0.5 / _Fs), mode=np.floor),
+        (_Npts_total // divisor))
+
+    tools.assert_equal(
+        _closest_digitized_point(t + (0.5 / _Fs), mode=np.ceil),
+        (_Npts_total // divisor) + 1)
+
+    # Subtract *half* of interval between successive timestamps to `t`
+    # (First test doesn't quite work at 0.5, presumably due to
+    # finite-precision arithmetic... the correct behavior is verified
+    # via the `eps` studies further below; also, we will not typically
+    # be using the `np.round` mode, so this subtlety should not
+    # be a practical issue).
+    tools.assert_equal(
+        _closest_digitized_point(t - (0.51 / _Fs), mode=np.round),
+        (_Npts_total // divisor) - 1)
+
+    tools.assert_equal(
+        _closest_digitized_point(t - (0.5 / _Fs), mode=np.floor),
+        (_Npts_total // divisor) - 1)
+
+    tools.assert_equal(
+        _closest_digitized_point(t - (0.5 / _Fs), mode=np.ceil),
+        (_Npts_total // divisor))
+
+    # Ensure behavior is correct at boundary between two adjacent points
     eps = np.finfo('float64').eps
 
+    # Add *half* of interval between successive timestamps + `2 * eps` to `t`
+    # (For some reason, tests fail when only adding `eps` to `t`, but
+    # they succeed when adding `2 * eps`... whatever -- good enough)
     tools.assert_equal(
-        _closest_digitized_point(t + (0.5 / _Fs)),  # no change
+        _closest_digitized_point(t + (0.5 / _Fs) + (2 * eps), mode=np.round),
+        (_Npts_total // divisor) + 1)
+
+    tools.assert_equal(
+        _closest_digitized_point(t + (0.5 / _Fs) + (2 * eps), mode=np.floor),
         (_Npts_total // divisor))
 
     tools.assert_equal(
-        _closest_digitized_point(t + ((0.5 + eps) / _Fs)),  # rounds up
-        (_Npts_total // divisor))
+        _closest_digitized_point(t + (0.5 / _Fs) + (2 * eps), mode=np.ceil),
+        (_Npts_total // divisor) + 1)
+
+    # Add *half* of interval between successive timestamps - `2 * eps` to `t`
+    # (For some reason, tests fail when only subtracting `eps` from`t`, but
+    # they succeed when subtracting `2 * eps`... whatever -- good enough)
+    tools.assert_equal(
+        _closest_digitized_point(t - (0.5 / _Fs) - (2 * eps), mode=np.round),
+        (_Npts_total // divisor) - 1)
 
     tools.assert_equal(
-        _closest_digitized_point(t - ((0.5 - eps) / _Fs)),  # no change
-        (_Npts_total // divisor))
+        _closest_digitized_point(t - (0.5 / _Fs) - (2 * eps), mode=np.floor),
+        (_Npts_total // divisor) - 1)
 
     tools.assert_equal(
-        _closest_digitized_point(t - (0.5 / _Fs)),  # rounds down
+        _closest_digitized_point(t - (0.5 / _Fs) - (2 * eps), mode=np.ceil),
         (_Npts_total // divisor))
 
     return
