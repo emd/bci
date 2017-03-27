@@ -89,6 +89,18 @@ class Signal(object):
             will be retrieved. The default values correspond to
             the default digitization limits of the mitpci system.
 
+            The specified `tlim` values will always bracket the retrieved
+            signal. That is, if `tlim[0]` does not correspond to an exact
+            digitization time, then the initial time returned (`Signal.t0`)
+            will be the closest digitization time *greater* than `tlim[0]`.
+            Similarly, if `tlim[1]` does not correspond to an exact
+            digitization time, then the final time (`Signal.t[-1]`) will be
+            the closest digitization time *less* than `tlim[1]`. Further,
+            if `tlim[0]` is less than the initial digitization time,
+            the retrieved signal will begin with the initial digitized point.
+            Similarly, if `tlim[1]` exceeds the final digitization time,
+            the retrieved signal will end with the final digitized point.
+
             If `tlim` is not `None` and it is *not* a length-two array,
             a ValueError is raised.
 
@@ -263,8 +275,8 @@ def _windows(tlim):
     '''
     # Find global position (i.e. if all windows were concatenated)
     # of the lower and upper temporal bounds
-    pt_min = _closest_digitized_point(tlim[0])
-    pt_max = _closest_digitized_point(tlim[1])
+    pt_min = _closest_digitized_point(tlim[0], mode=np.ceil)
+    pt_max = _closest_digitized_point(tlim[1], mode=np.floor)
 
     wlo = pt_min // _Npts_per_window
     whi = pt_max // _Npts_per_window
@@ -275,8 +287,8 @@ def _windows(tlim):
 def _crop(sig, tlim):
     'Crop `sig` to time window `tlim`.'
     # First, determine start and stop indices in global record
-    gstart = _closest_digitized_point(tlim[0])
-    gstop = _closest_digitized_point(tlim[1])
+    gstart = _closest_digitized_point(tlim[0], mode=np.ceil)
+    gstop = _closest_digitized_point(tlim[1], mode=np.floor)
 
     # Convert global indices to "local" indices relevant for slicing `sig`
     lstart = gstart % _Npts_per_window

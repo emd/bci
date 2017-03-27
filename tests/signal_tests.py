@@ -126,8 +126,11 @@ def test__crop():
     gstop = gstart + 100
 
     # Times corresponding to global indices
-    t0 = _trigger_time + (gstart / _Fs)
-    tf = _trigger_time + (gstop / _Fs)
+    # (Let `tlim` actually *bracket* the global indices; that is,
+    # let `t0` be smaller than timestamp for `gstart` and
+    # let `tf` be larger than timestamp for `gstop`.)
+    t0 = _trigger_time + (gstart / _Fs) - (0.999 / _Fs)
+    tf = _trigger_time + (gstop / _Fs) + (0.999 / _Fs)
     tlim = [t0, tf]
 
     # Prior to cropping, retrieved raw signals will be arrays
@@ -173,6 +176,10 @@ def test__windows():
 
     np.testing.assert_equal(
         _windows([t0, tf]),
+        np.array([window]))
+
+    np.testing.assert_equal(
+        _windows([t0 - (0.999 / _Fs), tf + (0.999 / _Fs)]),
         np.array([window]))
 
     # Window in middle where `tlim` *exactly* straddles boundaries
