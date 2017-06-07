@@ -187,7 +187,21 @@ class Signal(object):
 
             # Insert retrieved signal into appropriate location
             sl = slice(_Npts_per_window * i, (_Npts_per_window * (i + 1)))
-            sig[sl] = node.getData().data()
+
+            try:
+                sig[sl] = node.getData().data()
+            except ValueError:
+                print 'Data record shorter than nominal length'
+
+                x = node.getData().data()
+
+                istart = sl.start
+                istop = istart + len(x)
+                sl = slice(istart, istop)
+
+                sig[sl] = x
+
+                break
 
         # Crop signal to desired time window
         t0, sig = _crop(sig, tlim)
