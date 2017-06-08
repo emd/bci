@@ -6,6 +6,7 @@ the DIII-D bi-color interferometer (BCI) system.
 
 import numpy as np
 import MDSplus as mds
+import filters
 
 
 # Nominal trigger time
@@ -21,8 +22,11 @@ _Nwindows = 9
 _Npts_per_window = 2 ** 21
 _Npts_total = (_Nwindows * _Npts_per_window)
 
+# Default highpass filter to be used w/ interferometer data
+_hpf = filters.fir.Kaiser(-120, 5e3, 10e3, pass_zero=False, Fs=_Fs)
 
-class Signal(object):
+
+class Phase(object):
     '''An object corresponding to the signal retrieved from the BCI system.
 
     Attributes:
@@ -35,6 +39,13 @@ class Signal(object):
 
     beam - string
         The type of probe beam.
+
+    filt - :py:class:`Kaiser <filters.fir.Kaiser>` instance or None
+        The filter applied to the phase signal. If `None`, the phase
+        signal has not been filtered. Signal and time points
+        contaminated by the filter's boundary effects are *not*
+        returned/accessible from the attributes and methods
+        of the `Phase` class.
 
     x - array-like, (`N`,)
         The retrieved, single-pass phase signal. While all of the BCI chords
@@ -51,7 +62,7 @@ class Signal(object):
     t0 - float
         The time corresponding to the first retrieved point in the signal;
         that is, if x(t) corresponds to the continuous signal being sampled,
-        then `Signal.x[0]` = x(t0)
+        then `Phase.x[0]` = x(t0)
         [t0] = s
 
     vibration_subtracted - bool
@@ -67,9 +78,9 @@ class Signal(object):
         [t] = s
 
     '''
-    def __init__(self, shot, chord='V2', beam='CO2',
+    def __init__(self, shot, chord='V2', beam='CO2', filt=_hpf,
                  tlim=[-0.05, 5.2], vibration_subtracted=False):
-        '''Create an instance of the `Signal` class.
+        '''Create an instance of the `Phase` class.
 
         Input parameters:
         -----------------
@@ -84,6 +95,16 @@ class Signal(object):
             The type of probe beam. Valid values are 'CO2' and 'HeNe';
             a ValueError is raised for other values.
 
+        filt - :py:class:`Kaiser <filters.fir.Kaiser>` instance or None
+            The filter applied to the phase signal. If `None`,
+            do not filter the phase signal. A ValueError is raised
+            if `filt` is *not* an instance of `filters.fir.Kaiser`
+            or `None`. If `filt` was designed for a sample rate
+            that differs from that of the BCI system,
+            the parameters (i.e. cutoffs, ripple, etc.) will
+            be used to design a comparable filter for use
+            with the BCI sample rate.
+
         tlim - array_like, (2,)
             The lower and upper limits in time for which the signal
             will be retrieved. The default values correspond to
@@ -91,10 +112,10 @@ class Signal(object):
 
             The specified `tlim` values will always bracket the retrieved
             signal. That is, if `tlim[0]` does not correspond to an exact
-            digitization time, then the initial time returned (`Signal.t0`)
+            digitization time, then the initial time returned (`Phase.t0`)
             will be the closest digitization time *greater* than `tlim[0]`.
             Similarly, if `tlim[1]` does not correspond to an exact
-            digitization time, then the final time (`Signal.t[-1]`) will be
+            digitization time, then the final time (`Phase.t[-1]`) will be
             the closest digitization time *less* than `tlim[1]`. Further,
             if `tlim[0]` is less than the initial digitization time,
             the retrieved signal will begin with the initial digitized point.
@@ -132,8 +153,27 @@ class Signal(object):
         # Sampling rate
         self.Fs = _Fs
 
+        # Filter
+        self.filt = self._getFilter(filt)
+
         # Phase signal between `tlim`
         self.t0, self.x = self._getSignal(tlim)
+
+    def _getFilter(self, filt):
+        'Ensure `filt` is of correct type and compatible with BCI data.'
+        if isinstance(filt, filters.fir.Kaiser):
+            if filt.Fs == self.Fs:
+                self.filt = filt
+            else:
+                # Design similar filter for use at BCI sample rate
+                filt = filters.fir.Kaiser(
+                    filt.ripple, filt.width, filt.f_6dB,
+                    pass_zero=filt.pass_zero, Fs=self.Fs)
+        elif filt is not None:
+            raise ValueError(
+                '`filt` must be `filters.fir.Kaiser` or `None`')
+
+        return filt
 
     def _getSignal(self, tlim):
         'For window `tlim`, get initial time and (phase) signal.'
@@ -144,10 +184,21 @@ class Signal(object):
             else:
                 tlim = np.sort(tlim)
 
+        # Filtering will introduce edge effects. If filtering is desired,
+        # extend the length of the initially retrieved signal by `dt`
+        # on both sides of the requested `tlim` such that the corrupted
+        # signal is *outside* of `tlim` and can be discarded.
+        if self.filt is not None:
+            valid = self.filt.getValidSlice()
+            dt = valid.start / self.Fs
+        else:
+            dt = 0
+
         # The BCI record for each chord and beam in any given shot
         # is split across `_Nwindows` windows; determine which windows
-        # to load data from.
-        windows = _windows(tlim)
+        # to load data from. The explanation for `dt` is given
+        # in the commentary preceding its definition above...
+        windows = _windows([tlim[0] - dt, tlim[1] + dt])
 
         # Initialize array to store (potentially) concatenated phase data
         sig = np.zeros(_Npts_per_window * len(windows))
@@ -203,11 +254,14 @@ class Signal(object):
 
                 break
 
+        if self.filt is not None:
+            sig = self.filt.applyTo(sig)[valid]
+
         # Crop signal to desired time window
         t0, sig = _crop(sig, tlim)
 
         # Convert from double-pass to single-pass measurement
-        sig /= 2
+        sig /= 2.
 
         # Convert vibration-subtracted, line-integrated density
         # to corresponding phase, if needed.

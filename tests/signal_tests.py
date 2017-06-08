@@ -1,7 +1,7 @@
 from nose import tools
 import numpy as np
 from bci.signal import (
-    Signal, _plasma_induced_phase, _closest_digitized_point, _crop,
+    Phase, _plasma_induced_phase, _closest_digitized_point, _crop,
     _windows, _trigger_time, _Fs, _Npts_per_window, _Nwindows, _Npts_total)
 
 
@@ -203,12 +203,12 @@ def test__windows():
 #     tlim = [2.0, 2.25]
 #
 #     # Load vibration-subtracted CO2 phase data
-#     sig_CO2 = Signal(shot, tlim=tlim, beam='CO2')
+#     sig_CO2 = Phase(shot, tlim=tlim, beam='CO2')
 #
 #     # Load raw CO2 and HeNe phase data
-#     sig_CO2_raw = Signal(
+#     sig_CO2_raw = Phase(
 #         shot, tlim=tlim, beam='CO2', vibration_subtracted=False)
-#     sig_HeNe_raw = Signal(
+#     sig_HeNe_raw = Phase(
 #         shot, tlim=tlim, beam='HeNe', vibration_subtracted=False)
 #
 #     # Perform vibration-subtraction on CO2 phase manually
