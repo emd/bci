@@ -184,21 +184,10 @@ class Phase(object):
             else:
                 tlim = np.sort(tlim)
 
-        # Filtering will introduce edge effects. If filtering is desired,
-        # extend the length of the initially retrieved signal by `dt`
-        # on both sides of the requested `tlim` such that the corrupted
-        # signal is *outside* of `tlim` and can be discarded.
-        if self.filt is not None:
-            valid = self.filt.getValidSlice()
-            dt = valid.start / self.Fs
-        else:
-            dt = 0
-
         # The BCI record for each chord and beam in any given shot
         # is split across `_Nwindows` windows; determine which windows
-        # to load data from. The explanation for `dt` is given
-        # in the commentary preceding its definition above...
-        windows = _windows([tlim[0] - dt, tlim[1] + dt])
+        # to load data from.
+        windows = _windows([tlim[0], tlim[1]])
 
         # Initialize array to store (potentially) concatenated phase data
         sig = np.zeros(_Npts_per_window * len(windows))
@@ -218,7 +207,7 @@ class Phase(object):
         if self.vibration_subtracted and (self.beam == 'CO2'):
             phase_datatype = 'vibration-subtracted'
         else:
-            phase_datatype = 'raw'
+            phase_datatype = 'plasma + vibration'
 
         print ('\nLoading %s %s phase data (%s)'
                % (self.chord, self.beam, phase_datatype))
@@ -242,7 +231,7 @@ class Phase(object):
             try:
                 sig[sl] = node.getData().data()
             except ValueError:
-                print 'Data record shorter than nominal length'
+                print 'Signal shorter than nominal -- ending retrieval'
 
                 x = node.getData().data()
 
@@ -254,11 +243,16 @@ class Phase(object):
 
                 break
 
-        if self.filt is not None:
-            sig = self.filt.applyTo(sig)[valid]
-
         # Crop signal to desired time window
         t0, sig = _crop(sig, tlim)
+
+        # Apply filter; points contaminated by
+        # the filter's boundary effects are
+        # removed from the record
+        if self.filt is not None:
+            valid = self.filt.getValidSlice()
+            sig = self.filt.applyTo(sig)[valid]
+            t0 += (valid.start / self.Fs)
 
         # Convert from double-pass to single-pass measurement
         sig /= 2.
